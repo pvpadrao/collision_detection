@@ -1,97 +1,83 @@
 import numpy as np
 import fcl
 import matplotlib.pyplot as plt
-from fcl import CollisionObject, DynamicAABBTreeCollisionManager
+from matplotlib.patches import Circle, Rectangle
+
 
 # Load data from the NPZ file
-#loaded_data_agent1 = np.load('/lclhome/plope113/LCD_RIG-master/outputs/2/interpolated_data_normalized/distributed/ak2/agent1/log.npz')
-#loaded_data_agent2 = np.load('/lclhome/plope113/LCD_RIG-master/outputs/2/interpolated_data_normalized/distributed/ak2/agent2/log.npz')
+#loaded_data_agent1 = np.load('/lclhome/plope113/LCD_RIG-master/outputs/2/N45W123/distributed/ak2/agent1/log.npz')
+#loaded_data_agent2 = np.load('/lclhome/plope113/LCD_RIG-master/outputs/2/N45W123/distributed/ak2/agent2/log.npz')
 
-loaded_data_agent1 = np.load('/lclhome/plope113/LCD_RIG-master/outputs/2/N45W123/distributed/ak2/agent1/log.npz')
-loaded_data_agent2 = np.load('/lclhome/plope113/LCD_RIG-master/outputs/2/N45W123/distributed/ak2/agent2/log.npz')
+loaded_data_agent1 = np.load('/lclhome/plope113/LCD_RIG-master/outputs/2/interpolated_data_normalized/distributed/ak2/agent1/log.npz')
+loaded_data_agent2 = np.load('/lclhome/plope113/LCD_RIG-master/outputs/2/interpolated_data_normalized/distributed/ak2/agent2/log.npz')
+
+# Function to create a CollisionObject from x and y coordinates using spheres
+def create_collision_sphere_object_from_trajectory(x, radius_factor=1):
+    # Calculate the center and radius of the smallest bounding sphere around the trajectory
+    center = np.array([x[0], x[1], 0], dtype=np.float64)
+    #radius = max((x_coordinates.max() - x_coordinates.min()) / 2, (y_coordinates.max() - y_coordinates.min()) / 2) * radius_factor
+
+    # Create a CollisionObject for the trajectory using a Sphere shape
+    sphere = fcl.Sphere(radius_factor)
+    transformation = fcl.Transform(center)
+    collision_object = fcl.CollisionObject(sphere, transformation)
+    #collision_object.setTranslation(center)
+
+    return collision_object
+
+def create_collision_box_object_from_trajectory(x, width, length, height=0):
+    # Calculate the center and radius of the smallest bounding sphere around the trajectory
+    #center = np.array([x[0], x[1], 0], dtype=np.float64)
+    #radius = max((x_coordinates.max() - x_coordinates.min()) / 2, (y_coordinates.max() - y_coordinates.min()) / 2) * radius_factor
+
+    center = np.array([x[0], x[1], 0], dtype=np.float64)
+    # Create a CollisionObject for the trajectory using a Box shape
+    box = fcl.Box(length, width, height)
+    transformation = fcl.Transform(center)
+    collision_object = fcl.CollisionObject(box, transformation)
+    #collision_object.setTranslation(center)
+
+    return collision_object
 
 
+# Function to check for collisions pair-wise between two trajectories
+def check_collision_pairwise(p1, p2):
+
+    # Create Sphere CollisionObjects for each trajectory
+    #collision_object1 = create_collision_sphere_object_from_trajectory(p1)
+    #collision_object2 = create_collision_sphere_object_from_trajectory(p2)
+
+    # Create Box CollisionObjects for each trajectory
+    collision_object1 = create_collision_box_object_from_trajectory(p1, width=1, length=1)
+    collision_object2 = create_collision_box_object_from_trajectory(p2, width=1, length=1)
+
+    request = fcl.CollisionRequest()
+    result = fcl.CollisionResult()
+    
+    fcl.collide(collision_object1, collision_object2, request, result)
+    
+    return result.is_collision
+
+    
 # Extract x and y coordinates from loaded data
 xs_1 = loaded_data_agent1['xs']
 xs_2 = loaded_data_agent2['xs']
-
-
-# Extract x and y coordinates
-x_coordinates1 = xs_1[:, 0]
-y_coordinates1 = xs_1[:, 1]
-
-x_coordinates2 = xs_2[:, 0]
-y_coordinates2 = xs_2[:, 1]
-
-
-# Function to create a CollisionObject from x and y coordinates
-def create_collision_object_from_trajectory(x_coordinates, y_coordinates):
-    # Create a single CollisionObject for the trajectory using a Box shape
-    aabb_min = np.array([x_coordinates.min(), y_coordinates.min(), 0], dtype=np.float64)
-    aabb_max = np.array([x_coordinates.max(), y_coordinates.max(), 0], dtype=np.float64)
-    box = fcl.Box(aabb_max[0] - aabb_min[0], aabb_max[1] - aabb_min[1], 0.01)  # Adjust the dimensions as needed
-    collision_object = CollisionObject(box, fcl.Transform())
-    collision_object.setTranslation(aabb_min + (aabb_max - aabb_min) / 2)
-    return collision_object
-
-# Function to check for collisions between two trajectories
-def check_collision_with_trajectory(x_coordinates1, y_coordinates1, x_coordinates2, y_coordinates2, agent1_id='Agent 1', agent2_id='Agent 2'):
-    # Check if either trajectory is empty
-    if x_coordinates1.size == 0 or x_coordinates2.size == 0:
-        return False, None
-
-    # Create CollisionObjects for each trajectory
-    collision_object1 = create_collision_object_from_trajectory(x_coordinates1, y_coordinates1)
-    collision_object2 = create_collision_object_from_trajectory(x_coordinates2, y_coordinates2)
-
-    # Perform collision checking
-    request = fcl.CollisionRequest()
-    result = fcl.CollisionResult()
-    collide = fcl.collide(collision_object1, collision_object2, request, result)
-
-    if collide:
-        print(f"{len(result.contacts)} collision(s) detected!")
-        print("Contact Points:")
-        collision_points = []
-        for contact in result.contacts:
-            x_position = contact.pos[0]
-            y_position = contact.pos[1]
-            collision_points.append(contact.pos)  # Append collision point to the list
-            print(f"Collision at: ({x_position}, {y_position})")
-        return True, collision_points  # Return the identifier of the trajectory that caused the collision
-    else:
-        print("No collision detected.")
-        return False, None
-
-# Check for collisions
-collision_detected, colliding_points = check_collision_with_trajectory(x_coordinates1, y_coordinates1, x_coordinates2, y_coordinates2)
-if collision_detected:
-    print(f"Collision detected!")
-else:
-    print("No collision detected.")
-
-# Plot trajectories
-plt.figure(figsize=(8, 6))
-# Plot robot 1 trajectory
-plt.plot(x_coordinates1, y_coordinates1, label='Robot 1', color='blue')
-plt.scatter(x_coordinates1[0], y_coordinates1[0], color='green', label='Robot 1 Start')
-plt.scatter(x_coordinates1[-1], y_coordinates1[-1], color='red', label='Robot 1 End')
-
-# Plot robot 2 trajectory
-plt.plot(x_coordinates2, y_coordinates2, label='Robot 2', color='orange')
-plt.scatter(x_coordinates2[0], y_coordinates2[0], color='limegreen', label='Robot 2 Start')
-plt.scatter(x_coordinates2[-1], y_coordinates2[-1], color='maroon', label='Robot 2 End')
-
-# Plot collision points
-if colliding_points:
-    collision_points = np.array(colliding_points)
-    plt.scatter(collision_points[:, 0], collision_points[:, 1], color='red', label='Collision Points')
-
-plt.xlabel('X-coordinate')
-plt.ylabel('Y-coordinate')
-plt.title('Trajectories of Two Robots')
-plt.legend()
-plt.grid(True)
-plt.show()
-
-
+ax = plt.gca()
+plt.axis([-10, 10, -10, 10])
+for p1,p2 in zip(xs_1, xs_2):
+    #print(p1, p2)
+    #o1 = create_collision_object_from_trajectory(p1)
+    #o2 = create_collision_object_from_trajectory(p2)
+    ax.scatter(p1[0],p1[1], c='blue')
+    ax.scatter(p2[0],p2[1], c='red')
+    # c1 = Circle(p1, radius=1, alpha=0.4, color="blue")
+    # c2 = Circle(p2, radius=1, alpha=0.4, color="red")
+    # ax.add_patch(c1)
+    # ax.add_patch(c2)
+    rec1 = Rectangle([p1[0]-0.5,p1[1]-0.75], width=1, height=1.5, alpha=0.4, color="blue")
+    rec2 = Rectangle([p2[0]-0.5,p2[1]-0.75], width=1, height=1.5, alpha=0.4, color="red")
+    ax.add_patch(rec1)
+    ax.add_patch(rec2)
+    if check_collision_pairwise(p1, p2):
+        print("collision", p1, p2)
+    plt.pause(0.1)
